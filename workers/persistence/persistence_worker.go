@@ -68,7 +68,7 @@ func main() {
     rpc.HandleHTTP()
 
     // set a port for the server
-    port := ":1122"
+    port := ":1123"
 
     // listen for requests on 1122
     listener, err := net.Listen("tcp", port)

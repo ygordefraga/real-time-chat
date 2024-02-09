@@ -28,6 +28,7 @@ var (
 	}
 	chat_broadcast = make(chan Message) // Este é um canal que será usado para transmitir mensagens para todos os clientes conectados ao servidor WebSocket.
 	persist_broadcast = make(chan Message) // Este é um canal que será usado para transmitir mensagens para todos os clientes conectados ao servidor WebSocket.
+	historical_broadcast = make(chan Message)
 	clients   = make(map[string]*websocket.Conn) // Este é um mapa que associa os IDs dos clientes aos objetos websocket.Conn (ponteiro). Ele é usado para rastrear todas as conexões WebSocket ativas no servidor.)
 )
 
@@ -60,6 +61,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 		if msg.Type == "new_client" {
 			handleNewUserMessages(msg, conn)
+			readAllMessagesFromRPC(msg.Sender)
 		} else if msg.Type == "chat" {
 			chat_broadcast <- msg
 			persist_broadcast <- msg
@@ -94,8 +96,25 @@ func handleChatMessages() {
     }
 }
 
+func handleHistoricalMessages() {
+    for {
+        msg := <- historical_broadcast
+
+		log.Printf("Enviando mensagem do cliente %s para o cliente %s: %s\n", msg.Sender, msg.Receiver, msg.Text)
+		// Verifique se o destinatário está online e envie a mensagem apenas para ele
+		if conn, ok := clients[msg.Receiver]; ok {
+			err := conn.WriteJSON(msg)
+			if err != nil {
+				log.Println(err)
+				conn.Close()
+				delete(clients, msg.Receiver)
+			}
+		}
+    }
+}
+
 func forwardMessagesToRPC() {
-	client, err := rpc.DialHTTP("tcp", "localhost:1122") // Assuming RPC server is running on localhost:1122
+	client, err := rpc.DialHTTP("tcp", "localhost:1123") // Assuming RPC server is running on localhost:1122
     if err != nil {
         log.Fatal("error connecting to RPC server:", err)
     }
@@ -113,6 +132,26 @@ func forwardMessagesToRPC() {
     }
 }
 
+func readAllMessagesFromRPC(receiver string) {
+	client, err := rpc.DialHTTP("tcp", "localhost:1122") // Assuming RPC server is running on localhost:1122
+    if err != nil {
+        log.Fatal("error connecting to RPC server:", err)
+    }
+    defer client.Close()
+
+    var reply []Message
+	args := struct{ Receiver string }{Receiver: receiver} // Create and initialize the struct
+    err = client.Call("MessageRPCServer.ReadAllMessages", args, &reply)
+    if err != nil {
+        log.Fatal("error calling RPC service:", err)
+    }
+
+    // Process the reply, which contains all messages
+    for _, msg := range reply {
+		historical_broadcast <- msg
+    }
+}
+
 
 func main() {
 	// Configuração de rotas
@@ -120,8 +159,11 @@ func main() {
 
 	// Inicia o servidor
 	log.Println("Servidor iniciado na porta 8080")
+
+	go handleHistoricalMessages()
 	go handleChatMessages()
 	go forwardMessagesToRPC()
+	
 	err := http.ListenAndServe(":8080", nil)
 	if err != nil {
 		log.Fatal("Erro ao iniciar o servidor: ", err)

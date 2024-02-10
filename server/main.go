@@ -133,42 +133,47 @@ func handleHistoricalMessages() {
 }
 
 func forwardMessagesToRPC() {
-	client, err := rpc.DialHTTP("tcp", "localhost:1123") // Assuming RPC server is running on localhost:1122
-    if err != nil {
-        log.Fatal("error connecting to RPC server:", err)
-    }
-    defer client.Close()
+		client, err := rpc.DialHTTP("tcp", "localhost:1123") // Assuming RPC server is running on localhost:1123
+		if err != nil {
+			log.Println("Error connecting to Persistence server:", err)
+			log.Println("Retrying in 15 seconds...")
+			return
+		}
+		defer client.Close()
 
-    for {
-        msg := <- persist_broadcast
-        var reply string
-        err := client.Call("MessageRPCServer.PersistMessage", msg, &reply)
-        if err != nil {
-            log.Fatal("error calling RPC service:", err)
-        }
-
-        log.Println("RPC service response:", reply)
-    }
+		for {
+			msg := <-persist_broadcast
+			var reply string
+			err := client.Call("MessageRPCServer.PersistMessage", msg, &reply)
+			if err != nil {
+				log.Println("Error calling RPC service:", err)
+				break // Break out of the inner loop to retry connecting to RPC server
+			}
+			log.Println("RPC service response:", reply)
+		}
 }
 
 func readAllMessagesFromRPC(receiver string) {
 	client, err := rpc.DialHTTP("tcp", "localhost:1122") // Assuming RPC server is running on localhost:1122
-    if err != nil {
-        log.Fatal("error connecting to RPC server:", err)
-    }
-    defer client.Close()
+	if err != nil {
+		log.Println("Error connecting to Query server:", err)
+		log.Println("Retrying in 15 seconds...")
+		time.Sleep(15 * time.Second) // Sleep for 30 seconds before retrying
+		return
+	}
+	defer client.Close()
 
-    var reply []Message
+	var reply []Message
 	args := struct{ Receiver string }{Receiver: receiver} // Create and initialize the struct
-    err = client.Call("MessageRPCServer.ReadAllMessages", args, &reply)
-    if err != nil {
-        log.Fatal("error calling RPC service:", err)
-    }
+	err = client.Call("MessageRPCServer.ReadAllMessages", args, &reply)
+	if err != nil {
+		log.Fatal("error calling RPC service:", err)
+	}
 
-    // Process the reply, which contains all messages
-    for _, msg := range reply {
+	// Process the reply, which contains all messages
+	for _, msg := range reply {
 		historical_broadcast <- msg
-    }
+	}
 }
 
 

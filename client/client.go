@@ -3,9 +3,9 @@ package main
 import (
 	"bufio"
 	"encoding/json"
-	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -25,7 +25,7 @@ var (
 
 func main() {
 	u := "ws://localhost:8080/ws"
-	fmt.Printf("Conectando a %s...\n", u)
+	log.Printf("Conectando a %s...\n", u)
 
 	c, _, err := websocket.DefaultDialer.Dial(u, nil)
 	if err != nil {
@@ -41,17 +41,15 @@ func main() {
 		return
 	}
 
-	recipientID := getRecipientIDFromInput()
-
 	go readMessages(c)
 
 	for {
-		sendMessage(c, clientID, recipientID)
+		sendMessage(c, clientID)
 	}
 }
 
 func getClientIDFromInput() string {
-	fmt.Print("Digite o seu ID: ")
+	log.Print("Digite o seu ID: ")
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Scan()
 	return scanner.Text()
@@ -69,13 +67,6 @@ func registerClient(c *websocket.Conn, clientID string) error {
 	return c.WriteJSON(msg)
 }
 
-func getRecipientIDFromInput() string {
-	fmt.Print("Digite o ID do destinatário: ")
-	scanner := bufio.NewScanner(os.Stdin)
-	scanner.Scan()
-	return scanner.Text()
-}
-
 func readMessages(c *websocket.Conn) {
 	for {
 		_, message, err := c.ReadMessage()
@@ -91,14 +82,31 @@ func readMessages(c *websocket.Conn) {
 			return
 		}
 
-		fmt.Printf("%s: %s\n", receivedMsg.Sender, receivedMsg.Text)
+		if receivedMsg.Type == "error" {
+			log.Fatal("Erro do servidor: %s\n", receivedMsg.Text)
+		} else {
+			log.Printf("%s: %s\n", receivedMsg.Sender, receivedMsg.Text)
+		}
 	}
 }
 
-func sendMessage(c *websocket.Conn, clientID, recipientID string) {
+func sendMessage(c *websocket.Conn, clientID string) {
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Scan()
 	message := scanner.Text()
+
+	// Split the message text by space to extract the recipient ID
+	parts := strings.SplitN(message, " ", 2)
+	var recipientID string
+	if len(parts) > 1 && strings.HasPrefix(parts[0], "to:") {
+		recipientID = strings.TrimPrefix(parts[0], "to:")
+		message = parts[1] // Remove the recipient ID prefix from the message text
+	}
+	
+	if recipientID == "" {
+		log.Println("Recipient ID not provided. Please include recipient ID in the message 'to:<id> >message>'.")
+		return
+	}
 
 	msg := Message{
 		Text:     message,

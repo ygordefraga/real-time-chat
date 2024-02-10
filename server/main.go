@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"net/rpc"
@@ -43,7 +42,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	*/
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 		return
 	}
 	defer conn.Close()
@@ -55,28 +54,48 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		var msg Message
 		err := conn.ReadJSON(&msg)
 		if err != nil {
-			fmt.Println(err)
+			log.Println(err)
 			return
 		}
 
 		if msg.Type == "new_client" {
-			handleNewUserMessages(msg, conn)
-			readAllMessagesFromRPC(msg.Sender)
+			if addNewUser(msg, conn) {
+				go readAllMessagesFromRPC(msg.Sender)
+			}
 		} else if msg.Type == "chat" {
 			chat_broadcast <- msg
 			persist_broadcast <- msg
 		} else {
-			fmt.Println("Tipo de mensagem desconhecido:", msg.Type)
+			log.Println("Unknown message:", msg.Type)
 		}
 	}
 }
 
-func handleNewUserMessages(msg Message, conn *websocket.Conn) string {
+func addNewUser(msg Message, conn *websocket.Conn) bool {
 	// Adicione o cliente ao mapa de clientes
 	clientID := msg.Text
-	clients[clientID] = conn
-	log.Printf("Novo usuário adicionado: %s\n", clientID)
-	return clientID
+
+	// Check if the client ID is already in use
+	if _, exists := clients[clientID]; exists {
+		// Client ID already in use, return an error
+		log.Printf("User already exists: %s\n", clientID)
+		err := conn.WriteJSON(Message{
+			Text:     "User already exists",
+			Sender:   "server",
+			Receiver: clientID,
+			Type:     "error",
+			Timestamp: time.Now(),
+		})
+		if err != nil {
+			log.Println("Erro ao enviar mensagem de erro:", err)
+		}
+		return false
+	} else {
+		clients[clientID] = conn
+		log.Printf("New user: %s\n", clientID)
+		return true
+	}
+
 }
 
 func handleChatMessages() {

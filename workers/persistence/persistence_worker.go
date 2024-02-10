@@ -25,28 +25,19 @@ type MessageRPCServer string
 func (t *MessageRPCServer) PersistMessage(msg Message, reply *string) error {
     log.Printf("Received message: %s from sender: %s, receiver: %s\n", msg.Text, msg.Sender, msg.Receiver)
 
-	filename := "persistence/message_" + msg.Sender + "_" + msg.Receiver + "_" + msg.Timestamp.Format("2006_01_02_15_04_05") + ".json"
-	file, err := os.Create(filename)
-	if err != nil {
-		log.Printf("Error creating file: %v", err)
-	}
-	defer file.Close()
-	
-    encoder := json.NewEncoder(file)
-    if err := encoder.Encode(msg); err != nil {
-        return err
+    // Create a folder for the receiver if it doesn't exist
+    folderName := "persistence/" + msg.Receiver
+    if _, err := os.Stat(folderName); os.IsNotExist(err) {
+        if err := os.MkdirAll(folderName, 0755); err != nil {
+            return err
+        }
     }
 
-	*reply = "Message Persisted"
-
-    return nil
-}
-
-func saveMessageToFile(msg Message) error {
-    // Create a file with a unique name based on timestamp
-    filename := "message_" + msg.Sender + "_" + msg.Receiver + ".json"
+    // Create a file with a unique name based on timestamp inside the receiver's folder
+    filename := folderName + "/message_" + msg.Sender + "_" + msg.Timestamp.Format("2006_01_02_15_04_05") + ".json"
     file, err := os.Create(filename)
     if err != nil {
+        log.Printf("Error creating file: %v", err)
         return err
     }
     defer file.Close()
@@ -57,7 +48,7 @@ func saveMessageToFile(msg Message) error {
         return err
     }
 
-    log.Printf("Message saved to file: %s\n", filename)
+    *reply = "Message Persisted"
     return nil
 }
 

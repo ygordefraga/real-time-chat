@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/rpc"
+	"os"
 	"path/filepath"
 	"time"
 )
@@ -24,16 +25,23 @@ type Message struct {
 type MessageRPCServer string
 
 func (t *MessageRPCServer) ReadAllMessages(args struct{ Receiver string }, reply *[]Message) error {
-    files, err := ioutil.ReadDir("persistence")
+    folderPath := filepath.Join("persistence", args.Receiver)
+    files, err := ioutil.ReadDir(folderPath)
     if err != nil {
+        // If the folder doesn't exist or cannot be read, return an empty list of messages
+        if os.IsNotExist(err) {
+            log.Printf("Folder does not exist: %s\n", folderPath)
+            *reply = []Message{}
+            return nil
+        }
+        // For other errors, return the error
         return err
     }
-	log.Printf("%+v\n", args.Receiver) 
-
+    
     var messages []Message
     for _, file := range files {
         if filepath.Ext(file.Name()) == ".json" {
-            data, err := ioutil.ReadFile(filepath.Join("persistence", file.Name()))
+            data, err := ioutil.ReadFile(filepath.Join(folderPath, file.Name()))
             if err != nil {
                 return err
             }
@@ -41,10 +49,8 @@ func (t *MessageRPCServer) ReadAllMessages(args struct{ Receiver string }, reply
             if err := json.Unmarshal(data, &msg); err != nil {
                 return err
             }
-			if msg.Receiver == args.Receiver {
-            	messages = append(messages, msg)
-            	log.Printf("Message read: %+v\n", msg) // Print the message read from the file
-			}
+            messages = append(messages, msg)
+            log.Printf("Message read: %+v\n", msg) // Print the message read from the file
         }
     }
 

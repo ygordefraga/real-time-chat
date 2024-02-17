@@ -9,19 +9,11 @@ import (
 	"net/rpc"
 	"os"
 	"path/filepath"
-	"time"
+
+	. "github.com/ygordefraga/real-time-chat/shared"
 )
 
 // an RPC server in Go
-
-type Message struct {
-    Text     string `json:"text"`
-    Sender   string `json:"sender"`
-    Receiver string `json:"receiver"`
-    Type     string `json:"type"`
-	Timestamp time.Time `json:"timestamp"`
-}
-
 type MessageRPCServer string
 
 func (t *MessageRPCServer) ReadAllMessages(args struct{ Receiver string }, reply *[]Message) error {

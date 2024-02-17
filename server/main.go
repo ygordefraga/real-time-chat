@@ -7,16 +7,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	. "github.com/ygordefraga/real-time-chat/shared"
 )
-
-// Estrutura para manter informações da mensagem
-type Message struct {
-	Text     string `json:"text"`
-	Sender   string `json:"sender"`
-	Receiver string `json:"receiver"`
-	Type 	 string `json:"type"`
-	Timestamp time.Time `json:"timestamp"`
-}
 
 var (
 	// O Upgrader é usado para atualizar uma conexão HTTP regular para uma conexão WebSocket.
@@ -95,7 +87,6 @@ func addNewUser(msg Message, conn *websocket.Conn) bool {
 		log.Printf("New user: %s\n", clientID)
 		return true
 	}
-
 }
 
 func handleChatMessages() {
@@ -118,8 +109,6 @@ func handleChatMessages() {
 func handleHistoricalMessages() {
     for {
         msg := <- historical_broadcast
-
-		log.Printf("Enviando mensagem do cliente %s para o cliente %s: %s\n", msg.Sender, msg.Receiver, msg.Text)
 		// Verifique se o destinatário está online e envie a mensagem apenas para ele
 		if conn, ok := clients[msg.Receiver]; ok {
 			err := conn.WriteJSON(msg)
@@ -133,32 +122,30 @@ func handleHistoricalMessages() {
 }
 
 func forwardMessagesToRPC() {
-		client, err := rpc.DialHTTP("tcp", "localhost:1123") // Assuming RPC server is running on localhost:1123
-		if err != nil {
-			log.Println("Error connecting to Persistence server:", err)
-			log.Println("Retrying in 15 seconds...")
-			return
-		}
-		defer client.Close()
+    for {
+		msg := <-persist_broadcast
 
-		for {
-			msg := <-persist_broadcast
-			var reply string
-			err := client.Call("MessageRPCServer.PersistMessage", msg, &reply)
-			if err != nil {
-				log.Println("Error calling RPC service:", err)
-				break // Break out of the inner loop to retry connecting to RPC server
-			}
-			log.Println("RPC service response:", reply)
+        client, err := rpc.DialHTTP("tcp", "localhost:1123")
+        if err != nil {
+            log.Println("Failed to connect to RPC server:", err)
+			continue
+        }
+        defer client.Close()
+
+		var reply string
+		err = client.Call("MessageRPCServer.PersistMessage", msg, &reply)
+		if err != nil {
+			log.Println("Error calling RPC service:", err)
+			continue // Sair do loop interno para tentar reconectar ao servidor RPC
 		}
+		log.Println("RPC service response:", reply)
+	}
 }
 
 func readAllMessagesFromRPC(receiver string) {
 	client, err := rpc.DialHTTP("tcp", "localhost:1122") // Assuming RPC server is running on localhost:1122
 	if err != nil {
 		log.Println("Error connecting to Query server:", err)
-		log.Println("Retrying in 15 seconds...")
-		time.Sleep(15 * time.Second) // Sleep for 30 seconds before retrying
 		return
 	}
 	defer client.Close()

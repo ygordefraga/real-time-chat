@@ -1,4 +1,4 @@
-module github.com/ygordefraga/pong-game
+module github.com/ygordefraga/real-time-chat
 
 go 1.21.0
 

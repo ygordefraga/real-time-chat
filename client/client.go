@@ -3,25 +3,16 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
+	. "github.com/ygordefraga/real-time-chat/shared"
 )
 
-type Message struct {
-	Text     string `json:"text"`
-	Sender   string `json:"sender"`
-	Receiver string `json:"receiver"`
-	Type     string `json:"type"`
-	Timestamp time.Time `json:"timestamp"`
-}
-
-var (
-	myID      string
-)
 
 func main() {
 	u := "ws://localhost:8080/ws"
@@ -49,10 +40,10 @@ func main() {
 }
 
 func getClientIDFromInput() string {
-	log.Print("Digite o seu ID: ")
-	scanner := bufio.NewScanner(os.Stdin)
-	scanner.Scan()
-	return scanner.Text()
+	fmt.Print("Digite o seu ID: ")
+    scanner := bufio.NewScanner(os.Stdin)
+    scanner.Scan()
+    return scanner.Text()
 }
 
 func registerClient(c *websocket.Conn, clientID string) error {

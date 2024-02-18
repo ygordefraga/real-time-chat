@@ -57,6 +57,8 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		} else if msg.Type == "chat" {
 			chat_broadcast <- msg
 			persist_broadcast <- msg
+		} else if msg.Type == "session_end" {
+			go removeClient(msg.Sender)
 		} else {
 			log.Println("Unknown message:", msg.Type)
 		}
@@ -161,6 +163,11 @@ func readAllMessagesFromRPC(receiver string) {
 	for _, msg := range reply {
 		historical_broadcast <- msg
 	}
+}
+
+func removeClient(clientID string) {
+	delete(clients, clientID)
+	log.Printf("Client '%s' removed\n", clientID)
 }
 
 

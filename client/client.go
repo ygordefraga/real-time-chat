@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -33,6 +35,14 @@ func main() {
 	}
 
 	go readMessages(c)
+
+	sigc := make(chan os.Signal, 1)
+	signal.Notify(sigc, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigc
+		cleanupSession(c, clientID)
+		os.Exit(1)
+	}()
 
 	for {
 		sendMessage(c, clientID)
@@ -111,5 +121,20 @@ func sendMessage(c *websocket.Conn, clientID string) {
 	if err != nil {
 		log.Println("Erro ao enviar mensagem:", err)
 		return
+	}
+}
+
+func cleanupSession(c *websocket.Conn, clientID string) {
+	// Send a message to the server indicating the end of the session
+	msg := Message{
+		Text:      "Session ended",
+		Sender:    clientID,
+		Receiver:  "server",
+		Type:      "session_end",
+		Timestamp: time.Now(),
+	}
+	err := c.WriteJSON(msg)
+	if err != nil {
+		log.Println("Erro ao enviar sinal de fim de sessão:", err)
 	}
 }
